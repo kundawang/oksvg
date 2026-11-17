@@ -355,15 +355,16 @@ func (c *IconCursor) readStartElement(se xml.StartElement) (err error) {
 		e := fmt.Sprintf("error during processing svg element %s: %s", se.Name.Local, err.Error())
 		if c.returnError(e) {
 			err = errors.New(e)
+		} else {
+			err = nil
 		}
-		err = nil
 	}
 
 	if len(c.Path) > 0 {
 		//The cursor parsed a path from the xml element
 		pathCopy := make(rasterx.Path, len(c.Path))
 		copy(pathCopy, c.Path)
-		c.icon.SVGPaths = append(c.icon.SVGPaths,
+		c.icon.appendPath(
 			SvgPath{c.StyleStack[len(c.StyleStack)-1], pathCopy})
 		c.Path = c.Path[:0]
 	}

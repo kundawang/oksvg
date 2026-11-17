@@ -36,6 +36,7 @@ var (
 		"title":          titleF,
 		"linearGradient": linearGradientF,
 		"radialGradient": radialGradientF,
+		"image":          imageF,
 	}
 
 	svgF svgFunc = func(c *IconCursor, attrs []xml.Attr) error {
@@ -215,6 +216,53 @@ var (
 		c.inDefs = true
 		return nil
 	}
+	imageF svgFunc = func(c *IconCursor, attrs []xml.Attr) error {
+		var x, y, w, h float64
+		var href, par string
+		var err error
+		for _, attr := range attrs {
+			switch attr.Name.Local {
+			case "x":
+				x, err = parseFloat(attr.Value, 64)
+			case "y":
+				y, err = parseFloat(attr.Value, 64)
+			case "width":
+				w, err = parseFloat(attr.Value, 64)
+			case "height":
+				h, err = parseFloat(attr.Value, 64)
+			case "href": // also matches xlink:href
+				href = attr.Value
+			case "preserveAspectRatio":
+				par = attr.Value
+			}
+			if err != nil {
+				return err
+			}
+		}
+		if w <= 0 || h <= 0 {
+			// Zero sized images are not rendered; per the SVG spec this
+			// is not an error.
+			return nil
+		}
+		img, err := decodeImageHref(href)
+		if err != nil {
+			return err
+		}
+		iw := float64(img.Bounds().Dx())
+		ih := float64(img.Bounds().Dy())
+		dx, dy, dw, dh := resolveImageRect(x, y, w, h, iw, ih, par)
+		style := c.StyleStack[len(c.StyleStack)-1]
+		c.icon.appendImage(SvgImage{
+			Image:   img,
+			Opacity: style.FillOpacity,
+			X:       dx,
+			Y:       dy,
+			W:       dw,
+			H:       dh,
+			m:       style.mAdder.M,
+		})
+		return nil
+	}
 	styleF svgFunc = func(c *IconCursor, attrs []xml.Attr) error {
 		c.inDefsStyle = true
 		return nil
@@ -373,7 +421,7 @@ var (
 				//The cursor parsed a path from the xml element
 				pathCopy := make(rasterx.Path, len(c.Path))
 				copy(pathCopy, c.Path)
-				c.icon.SVGPaths = append(c.icon.SVGPaths, SvgPath{c.StyleStack[len(c.StyleStack)-1], pathCopy})
+				c.icon.appendPath(SvgPath{c.StyleStack[len(c.StyleStack)-1], pathCopy})
 				c.Path = c.Path[:0]
 			}
 			if def.Tag != "g" {
