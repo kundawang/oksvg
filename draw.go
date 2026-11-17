@@ -30,6 +30,8 @@ var (
 		"polyline":       polylineF,
 		"polygon":        polygonF,
 		"path":           pathF,
+		"text":           textF,
+		"tspan":          tspanF,
 		"desc":           descF,
 		"defs":           defsF,
 		"style":          styleF,
@@ -350,6 +352,14 @@ var (
 			if def.Tag == "endg" {
 				// pop style
 				c.StyleStack = c.StyleStack[:len(c.StyleStack)-1]
+				continue
+			}
+			if def.Tag == "text" || def.Tag == "tspan" {
+				// Text content is not stored in defs, so text elements
+				// cannot be instantiated by use.
+				if err := c.textError("text elements in defs referenced by use are not supported"); err != nil {
+					return err
+				}
 				continue
 			}
 			if err = c.PushStyle(def.Attrs); err != nil {

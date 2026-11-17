@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/srwiley/rasterx"
+	"golang.org/x/image/font/sfnt"
 )
 
 // IconCursor is used while parsing SVG files.
@@ -25,6 +26,10 @@ type IconCursor struct {
 	grad                                                 *rasterx.Gradient
 	inTitleText, inDescText, inGrad, inDefs, inDefsStyle bool
 	currentDef                                           []definition
+	font                                                 *sfnt.Font // caller-provided font for text elements, may be nil
+	inText                                               bool
+	text                                                 *textContext
+	missingGlyphs                                        map[rune]bool
 }
 
 // ReadGradURL reads an SVG format gradient url
@@ -308,6 +313,30 @@ func (c *IconCursor) readStyleAttr(curStyle *PathStyle, k, v string) error {
 		}
 		if k != "fill-opacity" {
 			curStyle.LineOpacity *= op
+		}
+	case "font-size":
+		fs, err := parseFloat(v, 64)
+		if err != nil || fs <= 0 || math.IsNaN(fs) || math.IsInf(fs, 0) {
+			// Unsupported sizes (keywords, em, %, ...) fall back to the
+			// inherited or default size with a warning.
+			if c.returnError(fmt.Sprintf("oksvg: unsupported font-size value %q, using inherited or default size", v)) {
+				return fmt.Errorf("oksvg: unsupported font-size value %q", v)
+			}
+			break
+		}
+		curStyle.FontSize = fs
+	case "text-anchor":
+		switch v {
+		case "start":
+			curStyle.TextAnchor = TextAnchorStart
+		case "middle":
+			curStyle.TextAnchor = TextAnchorMiddle
+		case "end":
+			curStyle.TextAnchor = TextAnchorEnd
+		default:
+			if c.returnError(fmt.Sprintf("oksvg: unsupported text-anchor value %q, using inherited or default value", v)) {
+				return fmt.Errorf("oksvg: unsupported text-anchor value %q", v)
+			}
 		}
 	case "transform":
 		m, err := c.parseTransform(v)

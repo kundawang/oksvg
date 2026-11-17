@@ -19,6 +19,7 @@ import (
 
 	"github.com/srwiley/rasterx"
 	"golang.org/x/image/colornames"
+	"golang.org/x/image/font/sfnt"
 	"golang.org/x/net/html/charset"
 )
 
@@ -28,9 +29,19 @@ import (
 // the first value determines if the icon ignores, errors out, or logs a warning
 // if it does not handle an element found in the icon file. Ignore warnings is
 // the default if no ErrorMode value is provided.
+// Text elements are skipped by this function, since no font is provided;
+// use ReadIconStreamWithFont to draw them.
 func ReadIconStream(stream io.Reader, errMode ...ErrorMode) (*SvgIcon, error) {
+	return ReadIconStreamWithFont(stream, nil, errMode...)
+}
+
+// ReadIconStreamWithFont reads the Icon from the given io.Reader like
+// ReadIconStream, and draws text and single-level tspan elements using the
+// provided font. The font is used for all text regardless of font-family
+// attributes. If font is nil, text elements are skipped with a warning.
+func ReadIconStreamWithFont(stream io.Reader, font *sfnt.Font, errMode ...ErrorMode) (*SvgIcon, error) {
 	icon := &SvgIcon{Defs: make(map[string][]definition), Grads: make(map[string]*rasterx.Gradient), Transform: rasterx.Identity}
-	cursor := &IconCursor{StyleStack: []PathStyle{DefaultStyle}, icon: icon}
+	cursor := &IconCursor{StyleStack: []PathStyle{DefaultStyle}, icon: icon, font: font}
 	if len(errMode) > 0 {
 		cursor.ErrorMode = errMode[0]
 	}
@@ -75,6 +86,14 @@ func ReadIconStream(stream io.Reader, errMode ...ErrorMode) (*SvgIcon, error) {
 				cursor.inTitleText = false
 			case "desc":
 				cursor.inDescText = false
+			case "text":
+				if cursor.inText {
+					if err = cursor.finalizeText(); err != nil {
+						return icon, err
+					}
+				}
+			case "tspan":
+				cursor.endTspan()
 			case "defs":
 				if len(cursor.currentDef) > 0 {
 					cursor.icon.Defs[cursor.currentDef[0].ID] = cursor.currentDef
@@ -102,6 +121,9 @@ func ReadIconStream(stream io.Reader, errMode ...ErrorMode) (*SvgIcon, error) {
 			}
 			if cursor.inDefsStyle {
 				classInfo = string(se)
+			}
+			if cursor.inText && cursor.text != nil {
+				cursor.text.appendText(string(se))
 			}
 		}
 	}
@@ -135,6 +157,8 @@ func ReadReplacingCurrentColor(stream io.Reader, currentColor string, errMode ..
 // If errMode is provided, the first value determines if the icon ignores, errors out, or logs a warning
 // if it does not handle an element found in the icon file.
 // Ignore warnings is the default if no ErrorMode value is provided.
+// Text elements are skipped by this function, since no font is provided;
+// use ReadIconWithFont to draw them.
 func ReadIcon(iconFile string, errMode ...ErrorMode) (*SvgIcon, error) {
 	fin, errf := os.Open(iconFile)
 	if errf != nil {
@@ -142,6 +166,19 @@ func ReadIcon(iconFile string, errMode ...ErrorMode) (*SvgIcon, error) {
 	}
 	defer fin.Close()
 	return ReadIconStream(fin, errMode...)
+}
+
+// ReadIconWithFont reads the Icon from the named file like ReadIcon, and draws
+// text and single-level tspan elements using the provided font. The font is
+// used for all text regardless of font-family attributes. If font is nil,
+// text elements are skipped with a warning.
+func ReadIconWithFont(iconFile string, font *sfnt.Font, errMode ...ErrorMode) (*SvgIcon, error) {
+	fin, errf := os.Open(iconFile)
+	if errf != nil {
+		return nil, errf
+	}
+	defer fin.Close()
+	return ReadIconStreamWithFont(fin, font, errMode...)
 }
 
 // ParseSVGColorNum reads the SFG color string e.g. #FBD9BD

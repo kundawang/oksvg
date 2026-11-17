@@ -11,6 +11,19 @@ import (
 	"github.com/srwiley/rasterx"
 )
 
+// TextAnchorMode specifies how a text element is horizontally
+// anchored relative to its x position.
+type TextAnchorMode uint8
+
+const (
+	// TextAnchorStart aligns the start of the text with the x position (default).
+	TextAnchorStart TextAnchorMode = iota
+	// TextAnchorMiddle centers the text on the x position.
+	TextAnchorMiddle
+	// TextAnchorEnd aligns the end of the text with the x position.
+	TextAnchorEnd
+)
+
 // PathStyle holds the state of the SVG style.
 type PathStyle struct {
 	FillOpacity, LineOpacity          float64
@@ -23,13 +36,28 @@ type PathStyle struct {
 	LineCap                           rasterx.CapFunc
 	LineJoin                          rasterx.JoinMode
 	mAdder                            rasterx.MatrixAdder // current transform
+	FontSize                          float64             // font size in user units, used by text elements
+	TextAnchor                        TextAnchorMode      // horizontal anchoring of text elements
 }
 
 // styleAttribute describes draw options, such as {"fill":"black"; "stroke":"white"}.
 type styleAttribute = map[string]string
 
 // DefaultStyle sets the default PathStyle to fill black, winding rule,
-// full opacity, no stroke, ButtCap line end and Bevel line connect.
-var DefaultStyle = PathStyle{1.0, 1.0, 2.0, 0.0, 4.0, nil, true,
-	color.NRGBA{0x00, 0x00, 0x00, 0xff}, nil,
-	nil, nil, rasterx.ButtCap, rasterx.Bevel, rasterx.MatrixAdder{M: rasterx.Identity}}
+// full opacity, no stroke, ButtCap line end and Bevel line connect,
+// a 16 unit font size and start text anchoring.
+var DefaultStyle = PathStyle{
+	FillOpacity: 1.0, LineOpacity: 1.0,
+	LineWidth: 2.0, DashOffset: 0.0, MiterLimit: 4.0,
+	Dash:              nil,
+	UseNonZeroWinding: true,
+	fillerColor:       color.NRGBA{0x00, 0x00, 0x00, 0xff},
+	linerColor:        nil,
+	LineGap:           nil,
+	LeadLineCap:       nil,
+	LineCap:           rasterx.ButtCap,
+	LineJoin:          rasterx.Bevel,
+	mAdder:            rasterx.MatrixAdder{M: rasterx.Identity},
+	FontSize:          16.0,
+	TextAnchor:        TextAnchorStart,
+}
